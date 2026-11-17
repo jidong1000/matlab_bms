@@ -42,12 +42,13 @@ p_fit = fminsearch(loss, p0, options);
 
 % 初始OCV
 B = p_fit(1);
-% 初始极化电压
+% 断流初始极化电压
 A = p_fit(2);
 tau_initial = exp(p_fit(3));
 
 Ip = mean(I(pulse_rows));
 Tp = t_off - time(pulse_rows(1));
+% 断流后，欧姆内阻压降消失
 R1_initial = A / (Ip * (1 - exp(-Tp / tau_initial)));
 
 %% 联合放电段和断流恢复段辨识R1和C1
