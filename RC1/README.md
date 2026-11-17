@@ -2,7 +2,7 @@
 
 [RC1.m](RC1.m) 用一阶 RC 等效电路模拟电池在放电脉冲下的端电压和荷电状态（SOC）。[parameters_identity.m](parameters_identity.m) 用 25 °C 的 HPPC 实验数据辨识欧姆内阻 $R_0$、极化电阻 $R_1$ 和极化电容 $C_1$。
 
-HPPC（Hybrid Pulse Power Characterization，混合脉冲功率特性测试）通过短时充放电脉冲测量电池的电压响应。这里选取一段放电脉冲及其后的静置数据，用电流切换时的电压突变估计 $R_0$，用断流后的电压恢复曲线估计 $R_1$ 和 $C_1$。
+HPPC（Hybrid Pulse Power Characterization，混合脉冲功率特性测试）通过短时充放电脉冲测量电池的电压响应。脚本用电流切换时的电压突变估计 $R_0$，用断流恢复曲线估算极化参数初值，再联合拟合放电段和恢复段，得到 $R_1$ 和 $C_1$。
 
 ## 运行方法
 
@@ -12,7 +12,9 @@ HPPC（Hybrid Pulse Power Characterization，混合脉冲功率特性测试）�
 RC1
 ```
 
-运行辨识前，确认脚本首行的 `file_pwd` 指向本机的 [HPPC_25C_full.csv](HPPC_25C_full.csv)。如果 CSV 和脚本都在 MATLAB 当前文件夹，可以将该行改为 `file_pwd = fullfile(pwd, 'HPPC_25C_full.csv');`。随后运行脚本，在命令窗口查看辨识结果。
+辨识脚本在文件中间定义了局部函数 `polarization_voltage`，按当前写法需要 MATLAB R2024a 或更新版本。[MathWorks 局部函数文档](https://www.mathworks.com/help/matlab/matlab_prog/local-functions-in-scripts.html)
+
+运行辨识前，确认脚本首行的 `file_pwd` 指向本机的 [HPPC_25C_full.csv](HPPC_25C_full.csv)。如果 CSV 和脚本都在 MATLAB 当前文件夹，可以将该行改为 `file_pwd = fullfile(pwd, 'HPPC_25C_full.csv');`。运行后，命令窗口会显示辨识参数和端电压 RMSE，图窗会显示极化电压以及仿真与实测端电压的对比。
 
 ```matlab
 parameters_identity
@@ -52,6 +54,7 @@ $$
 | 放电脉冲段 | `1945:2045` |
 | 放电脉冲断开前后 | `2045 → 2046` |
 | 断流后的静置段 | `2046:2345` |
+| 联合拟合与绘图窗口（去重前） | `1942:2345` |
 
 ### 欧姆内阻 $R_0$
 
@@ -61,33 +64,56 @@ $$
 R_0=\frac{1}{2}\left(\frac{|\Delta V_{\mathrm{on}}|}{|\Delta I_{\mathrm{on}}|}+\frac{|\Delta V_{\mathrm{off}}|}{|\Delta I_{\mathrm{off}}|}\right)
 $$
 
-### 极化电阻 $R_1$ 和极化电容 $C_1$
+### 用断流恢复曲线估算初值
 
 将断流后第一个采样时刻记为 $t_{\mathrm{off}}$，以 $s=t-t_{\mathrm{off}}$ 作为静置段的相对时间。用 `fminsearch` 最小化静置电压的残差平方和，拟合恢复曲线。
 
 $$
-V_{\mathrm{rest}}(s)=B-Ae^{-s/\tau}
+V_{\mathrm{rest}}(s)=B-Ae^{-s/\tau_{\mathrm{init}}}
 $$
 
-$B$ 为拟合曲线趋近的电压，$A$ 为拟合的电压恢复幅值，$\tau$ 为时间常数。脚本拟合 $\log(\tau)$，通过取指数保证 $\tau>0$。
+$B$ 为拟合曲线趋近的电压，$A$ 为电压恢复幅值，$\tau_{\mathrm{init}}$ 为时间常数初值。脚本以 $\log(\tau_{\mathrm{init}})$ 作为拟合变量，通过取指数保证时间常数为正。
 
-将脉冲近似为恒流，取脉冲段的平均电流为 $I_p$，取脉冲首个采样点到静置首个采样点的时间差为 $T_p$。在脉冲开始前极化电压近似为零的条件下，由 $A$ 反算 $R_1$，再由 $\tau=R_1C_1$ 得到 $C_1$。
+初值估算将脉冲近似为恒流，并取脉冲前极化电压为零。用脉冲段的平均电流 $I_p$ 和脉冲首个采样点到静置首个采样点的时间差 $T_p$ 计算极化电阻初值。
 
 $$
-R_1=\frac{A}{I_p\left(1-e^{-T_p/\tau}\right)},\qquad C_1=\frac{\tau}{R_1}
+R_{1,\mathrm{init}}=\frac{A}{I_p\left(1-e^{-T_p/\tau_{\mathrm{init}}}\right)}
 $$
 
-### 参考结果
+### 联合拟合放电段与恢复段
 
-根据仓库内的 CSV 和脚本公式复算，这段放电脉冲的辨识结果如下。
+从放电开始前 3 条数据到静置段末尾截取计算窗口。若相邻记录的时间、电流和电压均相同，只保留第一条。局部函数 `polarization_voltage` 将窗口首点的极化电压置为零，再用实际采样间隔 $\Delta t_k=t_{k+1}-t_k$ 与区间起点的实测电流 $I_k$ 递推极化电压。
+
+$$
+\begin{aligned}
+\alpha_k &= e^{-\Delta t_k/\tau} \\
+U_{p,k+1} &= \alpha_k U_{p,k}+(1-\alpha_k)R_1 I_k \\
+U_{\mathrm{sim},k} &= B-I_kR_0-U_{p,k}
+\end{aligned}
+$$
+
+联合拟合固定 $B$ 和 $R_0$，以初值估算得到的 $R_{1,\mathrm{init}}$、$\tau_{\mathrm{init}}$ 启动 `fminsearch`，在对数空间优化 $R_1$ 和 $\tau$。目标函数是放电段与恢复段的端电压均方误差之和，两段权重相同。放电前的静置点用于初始化和绘图，拟合权重为零。优化完成后，用 $C_1=\tau/R_1$ 计算极化电容。
+
+### 参考结果与端电压对比
+
+使用仓库内的 CSV 按脚本公式复算，得到以下结果。
 
 | 参数 | 参考值 |
 | --- | --- |
 | $R_0$ | 0.0236 Ω |
-| $R_1$ | 8.533 mΩ |
-| $C_1$ | 614.6 F |
 | $B$ | 4.157819 V |
-| $A$ | 21.065 mV |
-| $\tau$ | 5.244 s |
+| $R_1$ | 17.086 mΩ |
+| $\tau$ | 1.018 s |
+| $C_1$ | 59.6 F |
 
-更换数据时，需按新脉冲更新 `R0_id`、`pulse_rows` 和 `rest_rows`。将辨识结果用于仿真时，可手动替换 `RC1.m` 开头的 `R0`、`R1`、`C1`，电阻按 Ω 填写，例如把 8.533 mΩ 填为 `0.008533`。
+脚本以放电脉冲首个采样点为绘图时间零点，输出极化电压和端电压对比图。全窗口 RMSE 包含放电前保留的静置点。
+
+| 端电压误差统计范围 | RMSE |
+| --- | --- |
+| 全窗口 | 4.73 mV |
+| 放电段 | 5.26 mV |
+| 恢复段 | 4.41 mV |
+
+![联合拟合的端电压对比，蓝色为仿真电压，红色为实测电压](U_sim.png)
+
+更换数据时，按新脉冲更新 `R0_id`、`pulse_rows` 和 `rest_rows`。将辨识结果用于 `RC1.m` 仿真时，可手动替换脚本开头的 `R0`、`R1`、`C1`，电阻按 Ω 填写，例如将 17.086 mΩ 填为 `0.017086`。
