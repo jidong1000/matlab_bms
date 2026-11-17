@@ -40,7 +40,9 @@ options = optimset('TolX', 1e-9, 'TolFun', 1e-12);
 % 进行迭代辨识
 p_fit = fminsearch(loss, p0, options);
 
+% 初始OCV
 B = p_fit(1);
+% 初始极化电压
 A = p_fit(2);
 tau_initial = exp(p_fit(3));
 
