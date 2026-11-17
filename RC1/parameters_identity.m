@@ -8,8 +8,9 @@ time = T.Time;
 
 %% 辨识R0参数
 R0_id = [1944, 2045];
-for i = R0_id 
-    R0_TMP = abs(V(i) - V(i + 1)) / abs(I(i) - I(i + 1));
+R0_TMP = zeros(size(R0_id));
+for i = 1:length(R0_id) 
+    R0_TMP(i) = abs(V(R0_id(i)) - V(R0_id(i) + 1)) / abs(I(R0_id(i)) - I(R0_id(i) + 1));
 end
 R0 = mean(R0_TMP);
 fprintf("R0 = %.4f\n", R0);
