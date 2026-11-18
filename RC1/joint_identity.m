@@ -81,7 +81,7 @@ tau = exp(joint_fit(2));
 C1 = tau / R1;
 
 fprintf('B = %.6f V\n', B);
-fprintf('联合拟合: R1 = %.3f mOhm, tau = %.3f s, C1 = %.1f F\n', R1 * 1000, tau, C1);
+fprintf('A = %.3f, R1 = %.3f mOhm, tau = %.3f s, C1 = %.1f F\n', A, R1 * 1000, tau, C1);
 
 %% 用实测电流计算极化电压
 U_p = polarization_voltage(I_k, Delta_t, R1, tau);
@@ -94,9 +94,7 @@ ylabel("极化电压 (V)");
 %% 画出仿真端电压和实测端电压的对比图
 U_sim = base_voltage - U_p;
 error_mV = (U_sim - V_k) * 1000;
-fprintf('端电压 RMSE: 全窗口 %.2f mV, 放电 %.2f mV, 恢复 %.2f mV\n', ...
-    sqrt(mean(error_mV.^2)), sqrt(mean(error_mV(pulse_mask).^2)), ...
-    sqrt(mean(error_mV(rest_mask).^2)));
+fprintf('端电压 RMSE:%.2f mV', sqrt(mean(error_mV.^2)));
 figure;
 plot(relative_time, U_sim, 'blue');
 hold on;
