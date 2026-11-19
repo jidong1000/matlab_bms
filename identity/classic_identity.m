@@ -1,4 +1,4 @@
-file_pwd = "D:\project\matlab_project\BMS\RC1\HPPC_25C_full.csv";
+file_pwd = fullfile(fileparts(mfilename('fullpath')), 'HPPC_25C_full.csv');
 T = readtable(file_pwd, 'Delimiter', ',');
 T.Properties.VariableNames
 

@@ -1,4 +1,4 @@
-file_pwd = "D:\project\matlab_project\BMS\RC1\HPPC_25C_full.csv";
+file_pwd = fullfile(fileparts(mfilename('fullpath')), 'HPPC_25C_full.csv');
 T = readtable(file_pwd, 'Delimiter', ',');
 T.Properties.VariableNames
 
@@ -94,7 +94,7 @@ ylabel("极化电压 (V)");
 %% 画出仿真端电压和实测端电压的对比图
 U_sim = base_voltage - U_p;
 error_mV = (U_sim - V_k) * 1000;
-fprintf('端电压 RMSE:%.2f mV', sqrt(mean(error_mV.^2)));
+fprintf('端电压 RMSE:%.2f mV\n', sqrt(mean(error_mV.^2)));
 figure;
 plot(relative_time, U_sim, 'blue');
 hold on;
@@ -103,3 +103,30 @@ hold off;
 xlabel("时间 (s)");
 ylabel("端电压 (V)");
 legend("U_{sim}", "U_{real}");
+
+%% 用另一段脉冲来验证辨识参数的性能
+test_pre_rows = 99:101;
+test_pulse_rows = 102:202;
+test_rest_rows = 203:502;
+test_rows = test_pulse_rows(1):test_rest_rows(end);
+
+test_t = time(test_rows);
+test_V = V(test_rows);
+test_I = I(test_rows);
+
+test_dt = diff(test_t);
+test_B = mean(V(test_pre_rows));
+test_U_p = polarization_voltage(test_I, test_dt, R1, tau);
+test_U_sim = test_B - test_U_p - R0 * test_I;
+
+test_error = (test_U_sim - test_V) * 1000;
+fprintf("测试段 RMSE:%.3fmV\n", sqrt(mean(test_error .^ 2)));
+
+test_relative_time = test_t - time(test_pulse_rows(1));
+figure;
+plot(test_relative_time, test_U_sim, "blue");
+hold on;
+plot(test_relative_time, test_V, "red");
+hold off;
+legend("fit", "measured", "Location","best");
+ylabel("端电压(V)");

@@ -1,38 +1,34 @@
-# 电池一阶 RC 模型仿真与 HPPC 参数辨识
+# 电池一阶 RC 模型仿真、HPPC 参数辨识与 OCV–SOC 曲线
 
-[RC1.m](RC1.m) 用一阶 RC 等效电路模拟电池在放电脉冲下的端电压和荷电状态（SOC）。参数辨识提供 [classic_identity.m](classic_identity.m) 和 [joint_identity.m](joint_identity.m) 两个入口，分别使用断流恢复段拟合和放电段与恢复段联合拟合，辨识 25 °C HPPC 数据中的欧姆内阻 $R_0$、极化电阻 $R_1$ 和极化电容 $C_1$。
+[RC1.m](RC1/RC1.m) 用一阶 RC 等效电路模拟电池在放电脉冲下的端电压和荷电状态（SOC）。参数辨识提供 [classic_identity.m](identity/classic_identity.m) 和 [joint_identity.m](identity/joint_identity.m) 两个入口，分别使用断流恢复段拟合和放电段与恢复段联合拟合，辨识 25 °C HPPC 数据中的欧姆内阻 $R_0$、极化电阻 $R_1$ 和极化电容 $C_1$。[OCV_SOC.m](SOC/OCV_SOC.m) 从 Panasonic 18650PF 电芯的 25 °C C/20 放电试验中提取 OCV–SOC 曲线。
 
 HPPC（Hybrid Pulse Power Characterization，混合脉冲功率特性测试）通过短时充放电脉冲测量电池的电压响应。两个辨识脚本都用电流切换时的电压突变估计 $R_0$。经典方法从断流恢复曲线计算极化参数，联合方法以恢复段拟合结果为初值，再优化放电段和恢复段的端电压误差。
 
 ## 运行方法
 
-在 MATLAB 中将当前文件夹切换到本目录，运行仿真脚本。
+在 MATLAB 中将当前文件夹切换到项目根目录（本 README 所在目录），按需运行以下命令。也可以直接在 MATLAB 编辑器中运行各脚本。辨识和 OCV–SOC 脚本会以自身位置为起点查找数据，无需手动填写本机路径。
 
 ```matlab
-RC1
+run(fullfile('RC1', 'RC1.m'))
+run(fullfile('identity', 'classic_identity.m'))
+run(fullfile('identity', 'joint_identity.m'))
+run(fullfile('SOC', 'OCV_SOC.m'))
 ```
 
-辨识脚本在文件中间定义了局部函数 `polarization_voltage`，按当前写法需要 MATLAB R2024a 或更新版本。[MathWorks 局部函数文档](https://www.mathworks.com/help/matlab/matlab_prog/local-functions-in-scripts.html)
+两个辨识脚本在文件中间定义了局部函数 `polarization_voltage`，需要 MATLAB R2024a 或更新版本。[MathWorks 局部函数文档](https://www.mathworks.com/help/matlab/matlab_prog/local-functions-in-scripts.html)
 
-运行辨识前，分别确认两个脚本首行的 `file_pwd` 指向本机的 [HPPC_25C_full.csv](HPPC_25C_full.csv)。如果 CSV 和脚本都在 MATLAB 当前文件夹，可以将该行改为 `file_pwd = fullfile(pwd, 'HPPC_25C_full.csv');`。两个脚本均输出辨识参数、全窗口端电压 RMSE 和端电压对比图。联合方法还单独绘制极化电压曲线。
+如需打开一阶 RC 的 Simulink 模型，在项目根目录运行以下命令。
 
 ```matlab
-classic_identity
+open_system(fullfile('RC1', 'RC1_Simulink_Demo.slx'))
 ```
 
-```matlab
-joint_identity
-```
-
-目录中的文件用途如下。
-
-| 文件 | 用途 |
+| 目录 | 内容 |
 | --- | --- |
-| `RC1.m`、`RC1.png` | 固定参数的一阶 RC 仿真脚本与示例曲线 |
-| `classic_identity.m`、`U_sim_classic.png` | 经典恢复段辨识脚本与端电压对比图 |
-| `joint_identity.m`、`U_sim_joint.png` | 联合辨识脚本与端电压对比图 |
-| `HPPC_25C_full.csv` | 两种辨识方法共用的实验数据 |
-| `RC1_Simulink_Demo.slx` | 一阶 RC 的 Simulink 模型文件 |
+| [`RC1/`](RC1/) | 一阶 RC 仿真脚本、示例曲线和 Simulink 模型 |
+| [`identity/`](identity/) | 两种参数辨识脚本、共用的 [25 °C HPPC 数据](identity/HPPC_25C_full.csv) 及结果图 |
+| [`SOC/`](SOC/) | OCV–SOC 曲线提取脚本和示例图 |
+| [`datasets/`](datasets/) | Panasonic 18650PF 原始试验数据，含 OCV–SOC 脚本读取的 25 °C C/20 放电 MAT 文件 |
 
 ## 一阶 RC 模型仿真
 
@@ -56,7 +52,13 @@ $$
 
 脚本绘制电流、端电压与开路电压、SOC 三张子图。接通负载时，端电压先因欧姆压降突降，再随极化电压建立和 SOC 下降而继续降低。断流时，端电压先回跳，然后逐渐趋近开路电压，SOC 保持在约 78.89%。
 
-![一阶 RC 模型仿真曲线，依次为电流、端电压与开路电压、SOC](RC1.png)
+![一阶 RC 模型仿真曲线，依次为电流、端电压与开路电压、SOC](RC1/RC1.png)
+
+## OCV–SOC 曲线
+
+`SOC/OCV_SOC.m` 读取 25 °C C/20 放电试验文件中的 `meas.Voltage` 和 `meas.Ah`，截取第 `7:1247` 条记录。脚本以该段的总放电量归一化 SOC，并以低 SOC 到高 SOC 的顺序绘制电压曲线。运行后，`SOC_list` 和 `OCV_list` 保存在 MATLAB 工作区中。
+
+![25 °C C/20 放电试验提取的 OCV–SOC 曲线](SOC/OCV_SOC.png)
 
 ## HPPC 参数辨识
 
@@ -99,7 +101,7 @@ $$
 
 目录内保存的经典方法示例图如下，红线为仿真值，蓝线为实测值。该图片尚未反映当前时间常数还原后的计算结果，最新数值见参考结果表。
 
-![经典方法保存的端电压示例图](U_sim_classic.png)
+![经典方法保存的端电压示例图](identity/U_sim_classic.png)
 
 ### 联合辨识
 
@@ -151,8 +153,12 @@ $$
 
 联合脚本以放电脉冲首个采样点为绘图时间零点，蓝线为仿真端电压，红线为实测端电压。命令窗口输出 `B`、`A`、`R1`、`tau`、`C1` 和全窗口端电压 RMSE，其中 `A` 的输出数值单位为 V。
 
-![联合拟合的端电压对比，蓝色为仿真电压，红色为实测电压](U_sim_joint.png)
+![联合拟合的端电压对比，蓝色为仿真电压，红色为实测电压](identity/U_sim_joint.png)
+
+联合脚本还用同一 CSV 中的另一段放电脉冲验证辨识参数。脚本以第 `99:101` 行的平均电压作为初始开路电压，回放第 `102:502` 行并单独输出测试段 RMSE。
+
+![联合辨识参数在另一段放电脉冲上的端电压对比](identity/U_sim_joint_validation_25C_1p45A.png)
 
 ## 使用其他数据
 
-更换数据时，按新脉冲更新 `R0_id`、`pulse_rows` 和 `rest_rows`。将辨识结果用于 `RC1.m` 仿真时，可手动替换脚本开头的 `R0`、`R1`、`C1`，电阻按 Ω 填写，例如将 17.086 mΩ 填为 `0.017086`。
+更换数据时，按新脉冲更新 `R0_id`、`pulse_rows` 和 `rest_rows`。将辨识结果用于 `RC1/RC1.m` 仿真时，可手动替换脚本开头的 `R0`、`R1`、`C1`，电阻按 Ω 填写，例如将 17.086 mΩ 填为 `0.017086`。
